@@ -3,9 +3,6 @@
 set -e
 cd "$(dirname "$0")"
 
-echo "→ icon"
-swift make_icon.swift "📜" "App/Assets.xcassets/AppIcon.appiconset" >/dev/null
-
 echo "→ project"
 xcodegen generate >/dev/null
 
