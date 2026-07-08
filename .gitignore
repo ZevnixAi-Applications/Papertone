@@ -1,0 +1,18 @@
+# macOS
+.DS_Store
+
+# Build output
+build/
+DerivedData/
+*.xcuserstate
+
+# XcodeGen generates this from project.yml — recreate with `xcodegen generate`
+Papertone.xcodeproj/
+
+# Xcode user data
+xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# Legacy SwiftPM build flow (kept locally, not tracked)
+_legacy/
+.build/
