@@ -117,4 +117,8 @@ Trash. Preferences are stored under the `com.zevnix.papertone` user defaults.
 
 ---
 
+## License
+
+MIT — see [LICENSE](LICENSE). Contributions welcome.
+
 Made by Zevnix AI Pvt Ltd. © 2026.
