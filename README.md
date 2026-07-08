@@ -117,4 +117,4 @@ Trash. Preferences are stored under the `com.zevnix.papertone` user defaults.
 
 ---
 
-Made by Ritik Sharma. © 2026. All rights reserved.
+Made by Zevnix AI Pvt Ltd. © 2026.
