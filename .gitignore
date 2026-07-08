@@ -16,3 +16,6 @@ xcuserdata/
 # Legacy SwiftPM build flow (kept locally, not tracked)
 _legacy/
 .build/
+
+# Release output
+dist/
