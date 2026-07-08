@@ -1,29 +1,40 @@
 // The overlay: transparent, click-through windows (one per screen) that
-// render the paper tint + grain.
+// render a look's tint + grain + vignette, scaled by the master intensity.
 
 import AppKit
 
 final class OverlayView: NSView {
-    var style: TextureStyle = TextureCatalog.classicMatte { didSet { needsDisplay = true } }
-    var strength: Double = 0    { didSet { needsDisplay = true } }
-    var warmth: Double = 0.5    { didSet { needsDisplay = true } }
-    var grainAmount: Double = 0.5 { didSet { needsDisplay = true } }
+    var params: LookParams = .neutral { didSet { needsDisplay = true } }
+    var intensity: Double = 0        { didSet { needsDisplay = true } }
 
     override func draw(_ dirtyRect: NSRect) {
-        guard strength > 0 else { return }
+        guard intensity > 0 else { return }
+        let i = CGFloat(intensity)
 
-        // Warm matte wash.
-        let tint = warmedColor(style.baseTint, warmth: warmth)
-        tint.withAlphaComponent(CGFloat(style.tintAlpha * strength)).setFill()
-        bounds.fill()
+        // 1) Colour wash.
+        if params.tintAlpha > 0 {
+            NSColor(calibratedRed: CGFloat(params.tint.r),
+                    green: CGFloat(params.tint.g),
+                    blue: CGFloat(params.tint.b),
+                    alpha: CGFloat(params.tintAlpha) * i).setFill()
+            bounds.fill()
+        }
 
-        // Paper grain, scaled by the grain slider.
-        if let grain = style.grain, let ctx = NSGraphicsContext.current {
+        // 2) Paper grain.
+        if params.grainAlpha > 0, let grain = Grain.shared, let ctx = NSGraphicsContext.current {
             ctx.saveGraphicsState()
-            ctx.cgContext.setAlpha(CGFloat(style.grainAlpha * strength * grainAmount * 2))
+            ctx.cgContext.setAlpha(CGFloat(params.grainAlpha) * i)
             NSColor(patternImage: grain).set()
             bounds.fill()
             ctx.restoreGraphicsState()
+        }
+
+        // 3) Vignette (radial darkening toward the edges).
+        if params.vignette > 0 {
+            let edge = NSColor.black.withAlphaComponent(CGFloat(params.vignette) * i)
+            if let g = NSGradient(colors: [.clear, .clear, edge]) {
+                g.draw(in: NSBezierPath(rect: bounds), relativeCenterPosition: .zero)
+            }
         }
     }
 }
@@ -35,8 +46,8 @@ final class OverlayWindow: NSWindow {
         isOpaque = false
         backgroundColor = .clear
         hasShadow = false
-        ignoresMouseEvents = true                 // click-through
-        level = .screenSaver                       // above normal windows & menu bar
+        ignoresMouseEvents = true
+        level = .screenSaver
         collectionBehavior = [.canJoinAllSpaces, .stationary,
                               .fullScreenAuxiliary, .ignoresCycle]
         setFrame(screen.frame, display: true)
@@ -52,7 +63,7 @@ final class OverlayWindow: NSWindow {
 /// Owns one window per screen, rebuilding when the display layout changes.
 final class OverlayController {
     private var windows: [OverlayWindow] = []
-    private var last: (TextureStyle, Double, Double, Double, Bool)?
+    private var last: (LookParams, Double, Bool)?
 
     init() {
         rebuild()
@@ -63,9 +74,7 @@ final class OverlayController {
 
     @objc private func screensChanged() {
         rebuild()
-        if let l = last {
-            apply(style: l.0, strength: l.1, warmth: l.2, grain: l.3, visible: l.4)
-        }
+        if let l = last { apply(params: l.0, intensity: l.1, visible: l.2) }
     }
 
     private func rebuild() {
@@ -73,17 +82,14 @@ final class OverlayController {
         windows = NSScreen.screens.map { OverlayWindow(screen: $0) }
     }
 
-    func apply(style: TextureStyle, strength: Double, warmth: Double,
-               grain: Double, visible: Bool) {
-        last = (style, strength, warmth, grain, visible)
+    func apply(params: LookParams, intensity: Double, visible: Bool) {
+        last = (params, intensity, visible)
         for w in windows {
             if let v = w.contentView as? OverlayView {
-                v.style = style
-                v.warmth = warmth
-                v.grainAmount = grain
-                v.strength = visible ? strength : 0
+                v.params = params
+                v.intensity = visible ? intensity : 0
             }
-            if visible && strength > 0 { w.orderFrontRegardless() } else { w.orderOut(nil) }
+            if visible && intensity > 0 { w.orderFrontRegardless() } else { w.orderOut(nil) }
         }
     }
 }

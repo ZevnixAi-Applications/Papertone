@@ -5,7 +5,7 @@ import AppKit
 import Combine
 import SwiftUI
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let settings = PaperSettings()
     private let overlay = OverlayController()
     private var statusItem: NSStatusItem!
@@ -61,28 +61,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let menu = NSMenu()
+        menu.delegate = self            // rebuilt on open so state is always current
+        statusItem.menu = menu
+    }
+
+    // Rebuild the menu each time it opens: current enable state + preset list.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.removeAllItems()
+
         let toggle = NSMenuItem(title: "Enable paper effect",
                                 action: #selector(toggleEnabled), keyEquivalent: "")
         toggle.target = self
+        toggle.state = settings.enabled ? .on : .off
         menu.addItem(toggle)
 
+        menu.addItem(.separator())
+        let header = NSMenuItem(title: "Preset", action: nil, keyEquivalent: "")
+        header.isEnabled = false
+        menu.addItem(header)
+
+        for preset in settings.allPresets {
+            let item = NSMenuItem(title: preset.name,
+                                  action: #selector(pickPreset(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = preset.id
+            item.state = (settings.selectedPresetID == preset.id) ? .on : .off
+            menu.addItem(item)
+        }
+
+        menu.addItem(.separator())
         let settingsItem = NSMenuItem(title: "Settings…",
                                       action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
 
-        menu.addItem(.separator())
-
         let quit = NSMenuItem(title: "Quit Papertone",
                               action: #selector(quit), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
-
-        statusItem.menu = menu
     }
 
     @objc private func toggleEnabled() { settings.enabled.toggle() }
     @objc private func quit() { NSApp.terminate(nil) }
+
+    @objc private func pickPreset(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String,
+              let preset = settings.allPresets.first(where: { $0.id == id }) else { return }
+        settings.selectPreset(preset)
+    }
 
     @objc private func openSettings() {
         if settingsWindow == nil {
@@ -103,22 +129,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: Apply state to the overlay + gamma
 
     private func apply() {
-        statusItem.menu?.item(at: 0)?.state = settings.enabled ? .on : .off
-
         let frontmost = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         let excepted = frontmost != nil &&
             settings.exceptions.contains { $0.bundleID == frontmost }
-        let on = settings.enabled && !excepted
+        let on = settings.enabled && !excepted && settings.intensity > 0
 
-        let style = TextureCatalog.style(for: settings.textureID)
-        overlay.apply(style: style,
-                      strength: settings.strength,
-                      warmth: settings.warmth,
-                      grain: settings.grain,
+        overlay.apply(params: settings.params,
+                      intensity: on ? settings.intensity : 0,
                       visible: on)
 
-        if on && settings.softness > 0 {
-            GammaController.apply(softness: settings.softness)
+        if on {
+            GammaController.apply(settings.params, intensity: settings.intensity)
         } else {
             GammaController.restore()
         }
